@@ -34,7 +34,7 @@ class VideoSubbing:
             clip.write_audiofile(str(self.file.with_suffix(".mp3")))
         return self.file.with_suffix(".mp3")
 
-    def makelang(self, replace_lang=False):
+    def makelang(self, replace_lang=False, provide_lang = False, provided_lang = ""):
         """
         For use when forcing a single language, which defaults to the most common.
         Creates a txt file video_namelang.txt if replace_lang is True,
@@ -42,6 +42,9 @@ class VideoSubbing:
         hich should be formatted as "Language: {lang}"
         Returns language to be used.
         """
+        if provide_lang:
+            return provided_lang
+
         filelang = self.file.with_name(self.file.stem+"lang.txt")
         if filelang.exists() and replace_lang is False:
             with filelang.open(mode="r", encoding="utf-8") as f:
@@ -62,7 +65,7 @@ class VideoSubbing:
 
         return lang
 
-    def apply_whisper(self, multi_lang=True, replace_lang=False):
+    def apply_whisper(self, multi_lang=True, replace_lang=False, provide_lang = False, provided_lang = ""):
         """
         Applies whisper model using auto language if multi_lang=True,
         and otherwise using language as described in self.makelang
@@ -72,7 +75,7 @@ class VideoSubbing:
                  generate_kwargs={"task": "translate"})
         else:
             result = self.pipe(str(self.makemp3()), batch_size = 8, return_timestamps=True,
-                 generate_kwargs={"language": self.makelang(replace_lang), "task": "translate"})
+                 generate_kwargs={"language": self.makelang(replace_lang = replace_lang, provide_lang = provide_lang, provided_lang = provided_lang), "task": "translate"})
         return result["chunks"]
 
     def cleanup_mp3(self):
@@ -97,7 +100,7 @@ class VideoSubbing:
             print("Error: %s - %s." % (e.filename, e.strerror))
 
 
-    def create_subs(self, replace=True, multi_lang=True, replace_lang=False, cleanup=False):
+    def create_subs(self, replace=True, multi_lang=True, replace_lang=False, cleanup=False, provide_lang=False, provided_lang=""):
         """
         Creates a subtitle file called video_name.srt.
         If replace is False, then will check if file exists already and do nothing if it does.
@@ -105,7 +108,7 @@ class VideoSubbing:
         filesub = self.file.with_suffix(".srt")
         if replace is False and filesub.exists():
             return
-        subs = self.apply_whisper(multi_lang = multi_lang, replace_lang = replace_lang)
+        subs = self.apply_whisper(multi_lang = multi_lang, replace_lang = replace_lang, provide_lang = provide_lang, provided_lang = provided_lang)
 
         with filesub.open(mode='w', encoding="utf-8") as f:
             for i, subsi in enumerate(subs):
@@ -136,7 +139,7 @@ class VideoProcessing:
     use the corresponding method to create subtitles using
     VideoSubbing class
     """
-    def __init__(self, path, replace, multi_lang, replace_lang, cleanup, model_id = "openai/whisper-large-v3"):
+    def __init__(self, path, replace=True, multi_lang=True, replace_lang=False, cleanup=False, provide_lang = False, provided_lang = "", model_id = "openai/whisper-large-v3"):
 
         self.device = "cuda:0"  if torch.cuda.is_available() else "cpu"
         self.torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
@@ -167,6 +170,8 @@ class VideoProcessing:
         self.multi_lang = multi_lang
         self.replace_lang = replace_lang
         self.cleanup = cleanup
+        self.provide_lang = provide_lang
+        self.provided_lang = provided_lang
         self.path = path
 
     def subtitle_file(self):
@@ -174,7 +179,7 @@ class VideoProcessing:
         if self.path.suffix.lower() == ".mp4":
             subbing = VideoSubbing(self.path, self.pipe)
             subbing.create_subs(replace=self.replace,
-                                    multi_lang=self.multi_lang, replace_lang=self.replace_lang, cleanup=self.cleanup)
+                                    multi_lang=self.multi_lang, replace_lang=self.replace_lang, cleanup=self.cleanup, provide_lang = self.provide_lang, provided_lang = self.provided_lang)
         else:
             print("Warning: Input file was not a .mp4")
 
@@ -185,7 +190,7 @@ class VideoProcessing:
                 print(file)
                 subbing = VideoSubbing(file, self.pipe)
                 subbing.create_subs(replace=self.replace,
-                                    multi_lang=self.multi_lang, replace_lang=self.replace_lang, cleanup=self.cleanup)
+                                    multi_lang=self.multi_lang, replace_lang=self.replace_lang, cleanup=self.cleanup, provide_lang = self.provide_lang, provided_lang = self.provided_lang)
 
 
     def subtitle_folder_all(self):
@@ -196,7 +201,7 @@ class VideoProcessing:
                 print(file)
                 subbing = VideoSubbing(file, self.pipe)
                 subbing.create_subs(replace=self.replace,
-                                    multi_lang=self.multi_lang, replace_lang=self.replace_lang, cleanup=self.cleanup)
+                                    multi_lang=self.multi_lang, replace_lang=self.replace_lang, cleanup=self.cleanup, provide_lang = self.provide_lang, provided_lang = self.provided_lang)
 
 def run_command_line():
     """Captures arguments from the command line, and creates subtitles based on inputs"""
