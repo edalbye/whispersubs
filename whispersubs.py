@@ -3,17 +3,30 @@ import datetime
 import math
 from pathlib import Path
 from statistics import mode
+import numpy as np
+from scipy.signal import resample
+from dataclasses import dataclass
 
 import moviepy.editor as mpy
 import torch
 from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor, pipeline
+
+
+@dataclass
+class SubbingParameters:
+    replace: bool=True
+    multi_lang: bool=True
+    replace_lang: bool=False
+    preserve_intermediary_files: bool=False
+    provide_lang: bool = False
+    provided_lang: str = ""
 
 class VideoSubbing:
     """
     Custom class for managing data involved in generating a subtitle track for a given .mp4 video,
     assumed to be located in directory\video_name.mp4
     """
-    def __init__(self, file, pipe):
+    def __init__(self, file, pipe, *, parameters=None):
         try:
             if file.suffix.lower() == ".mp4":
                 self.file = file
@@ -22,60 +35,35 @@ class VideoSubbing:
         except TypeError as e:
             print("Error: %s." % e)
 
+        if parameters is None:
+            self.parameters = SubbingParameters()
+        else:
+            self.parameters = parameters
+        
         self.pipe = pipe
 
-    def makemp3(self):
-        """
-        Creates a video_name.mp3 file containing the audio from the video, if one doesn't exist
-        and returns the path to the mp3 file containing audio
-        """
-        if not (self.file.with_suffix(".mp3")).exists():
-            clip = mpy.AudioFileClip(str(self.file))
-            clip.write_audiofile(str(self.file.with_suffix(".mp3")))
-        return self.file.with_suffix(".mp3")
+        #Extract audio data from file
+        with mpy.AudioFileClip(str(self.file)) as mp3:
+            self.audio_input = mp3_to_mono_soundarray_16kHz(mp3)
 
-    def makelang(self, replace_lang=False, provide_lang = False, provided_lang = ""):
-        """
-        For use when forcing a single language, which defaults to the most common.
-        Creates a txt file video_namelang.txt if replace_lang is True,
-        or if file does not already exist. If the file exists reads {lang} from the first line,
-        hich should be formatted as "Language: {lang}"
-        Returns language to be used.
-        """
-        if provide_lang:
-            return provided_lang
+        #Determine which language should be used if only processing from one language
+        if not self.parameters.multi_lang:
+            if self.parameters.provide_lang:
+                self.lang = self.parameters.provided_lang
+            else:
+                self.lang = determine_lang(audio_input=self.audio_input, file=self.file, pipe=self.pipe, replace_lang=self.parameters.replace_lang, preserve_intermediary_files=self.parameters.preserve_intermediary_files)
 
-        filelang = self.file.with_name(self.file.stem+"lang.txt")
-        if filelang.exists() and replace_lang is False:
-            with filelang.open(mode="r", encoding="utf-8") as f:
-                first_line = f.readline()
-                lang = first_line.split(":")[-1].strip()
-        else:
-            result = self.pipe(str(self.makemp3()), chunk_length_s=30, return_timestamps=True,
-                           return_language=True, generate_kwargs={"task": "translate"})
-            langlist = [result["chunks"][i]["language"] for i in range(len(result["chunks"]))]
-            lang = mode(langlist)
-            with filelang.open(mode="w+", encoding="utf-8") as f:
-                f.write(f"Language: {lang}\n\n")
-                for i, langi in enumerate(langlist):
-                    if result["chunks"][i]["timestamp"][0] is None:
-                        continue
-                    else:
-                        f.write(f'{str(datetime.timedelta(seconds=math.floor(result["chunks"][i]["timestamp"][0])))}  {langi}\n')
-
-        return lang
-
-    def apply_whisper(self, multi_lang=True, replace_lang=False, provide_lang = False, provided_lang = ""):
+    def apply_whisper(self):
         """
         Applies whisper model using auto language if multi_lang=True,
         and otherwise using language as described in self.makelang
         """
-        if multi_lang:
-            result = self.pipe(str(self.makemp3()), return_timestamps=True,
+        if self.parameters.multi_lang:
+            result = self.pipe(self.audio_input, return_timestamps=True,
                  generate_kwargs={"task": "translate"})
         else:
-            result = self.pipe(str(self.makemp3()), batch_size = 8, return_timestamps=True,
-                 generate_kwargs={"language": self.makelang(replace_lang = replace_lang, provide_lang = provide_lang, provided_lang = provided_lang), "task": "translate"})
+            result = self.pipe(self.audio_input, batch_size = 8, return_timestamps=True,
+                 generate_kwargs={"language": self.lang, "task": "translate"})
         return result["chunks"]
 
     def cleanup_mp3(self):
@@ -100,38 +88,64 @@ class VideoSubbing:
             print("Error: %s - %s." % (e.filename, e.strerror))
 
 
-    def create_subs(self, replace=True, multi_lang=True, replace_lang=False, cleanup=False, provide_lang=False, provided_lang=""):
+    def create_subs(self):
         """
         Creates a subtitle file called video_name.srt.
         If replace is False, then will check if file exists already and do nothing if it does.
         """
         filesub = self.file.with_suffix(".srt")
-        if replace is False and filesub.exists():
+        if self.parameters.replace is False and filesub.exists():
             return
-        subs = self.apply_whisper(multi_lang = multi_lang, replace_lang = replace_lang, provide_lang = provide_lang, provided_lang = provided_lang)
+        subs = self.apply_whisper()
 
-        with filesub.open(mode='w', encoding="utf-8") as f:
-            for i, subsi in enumerate(subs):
-                sub = []
-                sub.append(i+1)
-                if subs[i]["timestamp"][0] is None:
-                    continue
-                else:
-                    sub.append(str(datetime.timedelta(seconds=math.floor(subsi["timestamp"][0]))))
-                if subs[i]["timestamp"][1] is None:
-                    sub.append(str(datetime.timedelta(seconds=math.floor(subsi["timestamp"][0]+10))))
-                else:
-                    sub.append(str(datetime.timedelta(seconds=math.floor(subsi["timestamp"][1]))))
-                sub.append(subsi["text"])
+        write_subs(filesub, subs)
 
-                f.write(f'{sub[0]}\n0{sub[1]},000  -->  0{sub[2]},000\n{sub[3]}\n\n')
+def determine_lang(audio_input, file, pipe, replace_lang=False, preserve_intermediary_files=False):
+    """Used to determine what language to use, in the case that only a single language is expected in the audio.
+        Divides audio up into 30 second chunks and runs through whisper pipeline "pipe",  then returns the most common 
+        language appearing in the output. A text file with all the detected languages, as well as the most common
+        detected can be saved with "preserve_intermediary_files"=True. This file will also be checked for before
+        doing any processing, and it's result used instead if it is found."""
+    filelang = file.with_name(file.stem+"lang.txt") #Location of detected language file
+    if filelang.exists() and replace_lang is False:
+        with filelang.open(mode="r", encoding="utf-8") as f:
+            first_line = f.readline()
+            lang = first_line.split(":")[-1].strip()
+    else:
+        result = pipe(audio_input, chunk_length_s=30, return_timestamps=True,
+                    return_language=True, generate_kwargs={"task": "translate"})
+        langlist = [result["chunks"][i]["language"] for i in range(len(result["chunks"]))]
+        lang = mode(langlist)
 
-        if cleanup:
-            self.cleanup_mp3()
-            if not multi_lang:
-                self.cleanup_langfile()
+        #Save text file with details of language detection, if requested
+        if preserve_intermediary_files:
+            with filelang.open(mode="w+", encoding="utf-8") as f:
+                f.write(f"Language: {lang}\n\n")
+                for i, langi in enumerate(langlist):
+                    if result["chunks"][i]["timestamp"][0] is None:
+                        continue
+                    else:
+                        f.write(f'{str(datetime.timedelta(seconds=math.floor(result["chunks"][i]["timestamp"][0])))}  {langi}\n')
+    return lang
 
+def write_subs(filesub, subs):
+    """Taking the output "subs" from VideoSubbing.create_subs(), which is of the form pipe(...)["chunks"],
+        formats the timestamps and text into the .srt format and saves it to the file "filesub" """
+    with filesub.open(mode='w', encoding="utf-8") as f:
+        for i, subsi in enumerate(subs):
+            sub = []
+            sub.append(i+1)
+            if subs[i]["timestamp"][0] is None:
+                continue
+            else:
+                sub.append(str(datetime.timedelta(seconds=math.floor(subsi["timestamp"][0]))))
+            if subs[i]["timestamp"][1] is None:
+                sub.append(str(datetime.timedelta(seconds=math.floor(subsi["timestamp"][0]+10))))
+            else:
+                sub.append(str(datetime.timedelta(seconds=math.floor(subsi["timestamp"][1]))))
+            sub.append(subsi["text"])
 
+            f.write(f'{sub[0]}\n0{sub[1]},000  -->  0{sub[2]},000\n{sub[3]}\n\n')
 
 class VideoProcessing:
     """
@@ -139,7 +153,7 @@ class VideoProcessing:
     use the corresponding method to create subtitles using
     VideoSubbing class
     """
-    def __init__(self, path, replace=True, multi_lang=True, replace_lang=False, cleanup=False, provide_lang = False, provided_lang = "", model_id = "openai/whisper-large-v3"):
+    def __init__(self, path, *, parameters=None, model_id = "openai/whisper-large-v3"):
 
         self.device = "cuda:0"  if torch.cuda.is_available() else "cpu"
         self.torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
@@ -166,20 +180,18 @@ class VideoProcessing:
             torch_dtype=self.torch_dtype,
             device=self.device,
         )
-        self.replace = replace
-        self.multi_lang = multi_lang
-        self.replace_lang = replace_lang
-        self.cleanup = cleanup
-        self.provide_lang = provide_lang
-        self.provided_lang = provided_lang
+        self.parameters = parameters
         self.path = path
 
     def subtitle_file(self):
         """Produces subtitle file for a given .mp4"""
         if self.path.suffix.lower() == ".mp4":
-            subbing = VideoSubbing(self.path, self.pipe)
-            subbing.create_subs(replace=self.replace,
-                                    multi_lang=self.multi_lang, replace_lang=self.replace_lang, cleanup=self.cleanup, provide_lang = self.provide_lang, provided_lang = self.provided_lang)
+            subbing = VideoSubbing(
+                    file = self.path,
+                    pipe = self.pipe,
+                    parameters = self.parameters
+                )
+            subbing.create_subs()
         else:
             print("Warning: Input file was not a .mp4")
 
@@ -188,9 +200,12 @@ class VideoProcessing:
         for file in self.path.glob('*.mp4'):
             if file.is_file():
                 print(file)
-                subbing = VideoSubbing(file, self.pipe)
-                subbing.create_subs(replace=self.replace,
-                                    multi_lang=self.multi_lang, replace_lang=self.replace_lang, cleanup=self.cleanup, provide_lang = self.provide_lang, provided_lang = self.provided_lang)
+                subbing = VideoSubbing(
+                    file = self.path,
+                    pipe = self.pipe,
+                    parameters = self.parameters
+                )
+                subbing.create_subs()
 
 
     def subtitle_folder_all(self):
@@ -199,9 +214,37 @@ class VideoProcessing:
         for file in self.path.glob('**/*.mp4'):
             if file.is_file():
                 print(file)
-                subbing = VideoSubbing(file, self.pipe)
-                subbing.create_subs(replace=self.replace,
-                                    multi_lang=self.multi_lang, replace_lang=self.replace_lang, cleanup=self.cleanup, provide_lang = self.provide_lang, provided_lang = self.provided_lang)
+                subbing = VideoSubbing(
+                    file = self.path,
+                    pipe = self.pipe,
+                    parameters = self.parameters
+                )
+                subbing.create_subs()
+
+
+def mp3_to_mono_soundarray_16kHz(mp3):
+    # Get the stereo sound array
+    stereo_sound_array = mp3.to_soundarray()
+    
+    # Convert stereo to mono by averaging the channels
+    if stereo_sound_array.ndim == 2 and stereo_sound_array.shape[1] == 2:
+        mono_sound_array = stereo_sound_array.mean(axis=1)
+    else:
+        mono_sound_array = stereo_sound_array  # Already mono
+    
+    # Get the original sample rate
+    original_sample_rate = mp3.fps
+    
+    # Define the new sample rate
+    new_sample_rate = 16000
+    
+    # Calculate the number of samples for the new sample rate
+    number_of_samples = int(len(mono_sound_array) * new_sample_rate / original_sample_rate)
+    
+    # Resample the audio
+    resampled_sound_array = resample(mono_sound_array, number_of_samples)
+    
+    return resampled_sound_array
 
 def run_command_line():
     """Captures arguments from the command line, and creates subtitles based on inputs"""
@@ -216,22 +259,23 @@ def run_command_line():
                         help='To process multiple languages within the same file')
     parser.add_argument("--replace_lang", action='store_true',
                         help='Force script to redetect language, if relevent')
-    parser.add_argument("--cleanup", action='store_true',
+    parser.add_argument("--preserve_intermediary_files", action='store_true',
                         help='Remove auxillary files created during processing')
 
 
 
     args = parser.parse_args()
 
-    location = Path(args.location)
-    replace = args.replace
-    multi_lang = args.multi_lang
-    replace_lang = args.replace_lang
-    cleanup = args.cleanup
+    location = Path(r"C:\Users\darkt\hindivideotest.mp4")
+
+    #location = Path(args.location)
     input_mode = args.input_mode
 
-    VideoProcessingRun = VideoProcessing(path = location, replace=replace,
-                                         multi_lang=multi_lang, replace_lang=replace_lang, cleanup=cleanup)
+    parameters = SubbingParameters(replace = args.replace, multi_lang = args.multi_lang, replace_lang = args.replace_lang, preserve_intermediary_files = args.preserve_intermediary_files)
+
+    print(parameters)
+
+    VideoProcessingRun = VideoProcessing(path = location, parameters = parameters)
 
     if input_mode == 'file':
         VideoProcessingRun.subtitle_file()
@@ -239,6 +283,9 @@ def run_command_line():
         VideoProcessingRun.subtitle_folder()
     elif input_mode == 'rootdir':
         VideoProcessingRun.subtitle_folder_all()
+
+#mp3 = mpy.AudioFileClip(r"C:\Users\darkt\shorttest.mp3")
+#aud = mp3_to_mono_soundarray_16kHz(mp3)
 
 if __name__ == "__main__":
     run_command_line()
