@@ -99,6 +99,8 @@ def subtitle_file(path: Path, pipe, parameters: SubbingParameters = None):
                 pipe = pipe,
                 parameters = parameters
             )
+        if subbing.audio_input is str(None):
+            return
         subbing.create_subs()
         if not parameters.preserve_intermediary_files:
             subbing.cleanup_wav()
@@ -121,7 +123,7 @@ def subtitle_folder_all(path: Path, pipe, parameters: SubbingParameters = None):
     for folder in folder_list:
         subtitle_folder(folder, pipe, parameters)
 
-def create_subtitles(path, input_mode, parameters = None, model_id = "openai/whisper-large-v3"):
+def create_subtitles(path, input_mode, include_subfolders, parameters = None, model_id = "openai/whisper-large-v3"):
     device = "cuda:0"  if torch.cuda.is_available() else "cpu"
     torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
 
@@ -148,7 +150,7 @@ def create_subtitles(path, input_mode, parameters = None, model_id = "openai/whi
 
     if input_mode == 'file':
         subtitle_file(path, pipe, parameters)
-    elif input_mode == 'folder':
+    elif input_mode == 'folder' and not include_subfolders:
         subtitle_folder(path, pipe, parameters)
-    elif input_mode == 'rootdir':
+    elif input_mode == 'folder':
         subtitle_folder_all(path, pipe, parameters)

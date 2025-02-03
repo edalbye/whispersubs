@@ -6,6 +6,8 @@ import customtkinter as ctk
 import main
 import subtitling
 from constants import valid_video_file_types
+from script_running import run_process
+
 
 
 class appUI:
@@ -44,7 +46,7 @@ class appUI:
 
         self.input_mode_selection = ctk.CTkComboBox(self.location_frame, values = self.input_mode_options, variable=self.input_mode)
         self.include_subfolders = ctk.IntVar()
-        self.include_subfolders_checkbox = ctk.CTkCheckBox(self.location_frame, text = "Include all subfolders", command = set_input_mode(self.input_mode, self.include_subfolders), variable = self.include_subfolders)
+        self.include_subfolders_checkbox = ctk.CTkCheckBox(self.location_frame, text = "Include all subfolders", variable = self.include_subfolders)
 
         self.video_location_lab = ctk.CTkLabel(self.location_frame, text="Please select Location:")
         self.video_location = ctk.CTkEntry(self.location_frame, textvariable=self.path)
@@ -124,11 +126,15 @@ class appUI:
         self.replace = ctk.IntVar(value=0)
         self.replace_check = ctk.CTkCheckBox(self.confirm_frame, variable=self.replace, text="Overwrite any existing subtitle files")
 
-        def runprocess():
-            parameters = set_parameters(self.lang_selection.get(), self.replace_lang.get(), self.selected_lang.get(), self.replace.get())
-            subtitling.create_subtitles(path = Path(self.path.get()), input_mode=set_input_mode(self.input_mode.get(), self.include_subfolders.get()), parameters=parameters)
+        # def runprocess():
+        #     parameters = set_parameters(self.lang_selection.get(), self.replace_lang.get(), self.selected_lang.get(), self.replace.get())
+        #     try:
+        #         subtitling.create_subtitles(path = Path(self.path.get()), input_mode=set_input_mode(self.input_mode.get(), self.include_subfolders.get()), parameters=parameters)
+        #     except Exception as e:
+        #         raise RuntimeError("Failed to generate subtitles") from e
 
-        self.confirm_button = ctk.CTkButton(self.confirm_frame, text="Create Subtitles", command=runprocess)
+
+        self.confirm_button = ctk.CTkButton(self.confirm_frame, text="Create Subtitles", command=lambda: run_process(self))
 
         self.replace_check.grid(row=0, column=0, sticky="nsew")
         self.confirm_button.grid(row=1, column=1, sticky="nsew")
@@ -138,35 +144,38 @@ class appUI:
         self.bigframe.pack(expand=True, fill='both')
         self.root.mainloop()
 
-def set_parameters(lang_selection, replace_lang, selected_lang, replace):
-    parameters = subtitling.SubbingParameters()
-    if lang_selection == "Auto-Detect Single Language":
-        parameters.multi_lang = False
-        if replace_lang:
-            parameters.replace = True
-    elif lang_selection == "Auto-Detect Multiple Language":
-        parameters.multi_lang = True
-    elif lang_selection == "Choose Language":
-        parameters.multi_lang = False
-        parameters.provide_lang = True
-        parameters.provided_lang = selected_lang
-    
-    if replace:
-        parameters.replace = True
-    else:
-        parameters.replace = False
+    # def loadingScreen(self, running_function):
+    # # Create a top-level window for the loading screen
+    #     loading_window = ctk.CTkToplevel(self.root)
+    #     loading_window.title("Loading")
+    #     loading_window.geometry("200x100")
 
-    return parameters
+    # # Center the loading window on the screen
+    #     screen_width = self.root.winfo_screenwidth()
+    #     screen_height = self.root.winfo_screenheight()
+    #     x = (screen_width - 200) // 2
+    #     y = (screen_height - 100) // 2
+    #     loading_window.geometry(f"+{x}+{y}")
 
-def set_input_mode(input_mode, include_subfolders=False):
+    # # Add a label to the loading window
+    #     loading_label = ctk.CTkLabel(loading_window, text="Loading...", font=("Helvetica", 16))
+    #     loading_label.pack(expand=True)
+
+    # # Schedule the long-running function to run after the loading window is displayed
+    #     self.root.after(100, lambda: run_function())
+
+    #     def run_function():
+    #         running_function()
+    #         loading_window.destroy()
+
+
+
+def set_input_mode(input_mode):
     if input_mode == "Single File":
         return "file"
         
     elif input_mode == "Folder":
-        if include_subfolders:
-            return "rootdir"
-        else:
-            return "folder"
+        return "folder"
             
 
 
