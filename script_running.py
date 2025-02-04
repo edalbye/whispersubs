@@ -1,5 +1,4 @@
 from pathlib import Path
-import tkinter.filedialog as tkfd
 import time
 import logging
 
@@ -8,16 +7,12 @@ import torch
 from transformers import pipeline
 from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor
 
-import main
 import subtitling
 from constants import valid_video_file_types
 from utils import get_list_of_videos
 
-
-
-
-
 def run_process(appUI, model_id = "openai/whisper-large-v3"):
+    """Initializes model, and then proceeds to create subtitles based on information from UI."""
     parameters = set_parameters(appUI.lang_selection.get(), appUI.replace_lang.get(), appUI.selected_lang.get(), appUI.replace.get())
 
     device = "cuda:0"  if torch.cuda.is_available() else "cpu"
@@ -61,6 +56,7 @@ def run_process(appUI, model_id = "openai/whisper-large-v3"):
 
 
 def set_parameters(lang_selection, replace_lang, selected_lang, replace):
+    """Creates a SubbingParameters object corresponding to parameters entered in ui."""
     parameters = subtitling.SubbingParameters()
     if lang_selection == "Auto-Detect Single Language":
         parameters.multi_lang = False
@@ -79,7 +75,3 @@ def set_parameters(lang_selection, replace_lang, selected_lang, replace):
         parameters.replace = False
 
     return parameters
-
-
-
-

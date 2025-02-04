@@ -3,12 +3,9 @@ import tkinter.filedialog as tkfd
 
 import customtkinter as ctk
 
-import main
 import subtitling
 from constants import valid_video_file_types
 from script_running import run_process
-
-
 
 class appUI:
 
@@ -71,9 +68,6 @@ class appUI:
 
         self.input_mode.trace_add("write", toggle_include_subfolders_visablilty)
 
-
-
-
         self.location_frame.pack(fill = "both", expand=1)
 
         #UI elements relating to language mode
@@ -126,14 +120,6 @@ class appUI:
         self.replace = ctk.IntVar(value=0)
         self.replace_check = ctk.CTkCheckBox(self.confirm_frame, variable=self.replace, text="Overwrite any existing subtitle files")
 
-        # def runprocess():
-        #     parameters = set_parameters(self.lang_selection.get(), self.replace_lang.get(), self.selected_lang.get(), self.replace.get())
-        #     try:
-        #         subtitling.create_subtitles(path = Path(self.path.get()), input_mode=set_input_mode(self.input_mode.get(), self.include_subfolders.get()), parameters=parameters)
-        #     except Exception as e:
-        #         raise RuntimeError("Failed to generate subtitles") from e
-
-
         self.confirm_button = ctk.CTkButton(self.confirm_frame, text="Create Subtitles", command=lambda: run_process(self))
 
         self.replace_check.grid(row=0, column=0, sticky="nsew")
@@ -144,40 +130,14 @@ class appUI:
         self.bigframe.pack(expand=True, fill='both')
         self.root.mainloop()
 
-    # def loadingScreen(self, running_function):
-    # # Create a top-level window for the loading screen
-    #     loading_window = ctk.CTkToplevel(self.root)
-    #     loading_window.title("Loading")
-    #     loading_window.geometry("200x100")
-
-    # # Center the loading window on the screen
-    #     screen_width = self.root.winfo_screenwidth()
-    #     screen_height = self.root.winfo_screenheight()
-    #     x = (screen_width - 200) // 2
-    #     y = (screen_height - 100) // 2
-    #     loading_window.geometry(f"+{x}+{y}")
-
-    # # Add a label to the loading window
-    #     loading_label = ctk.CTkLabel(loading_window, text="Loading...", font=("Helvetica", 16))
-    #     loading_label.pack(expand=True)
-
-    # # Schedule the long-running function to run after the loading window is displayed
-    #     self.root.after(100, lambda: run_function())
-
-    #     def run_function():
-    #         running_function()
-    #         loading_window.destroy()
-
-
-
 def set_input_mode(input_mode):
+    """Translates selected input mode to correct internal string."""
     if input_mode == "Single File":
         return "file"
         
     elif input_mode == "Folder":
         return "folder"
-            
-
 
 if __name__ == "__main__":
     UI = appUI()
+    
