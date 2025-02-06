@@ -124,6 +124,7 @@ def subtitle_folder_all(path: Path, pipe, parameters: SubbingParameters = None):
         subtitle_folder(folder, pipe, parameters)
 
 def create_subtitles(path, input_mode, include_subfolders, parameters = None, model_id = "openai/whisper-large-v3"):
+    """Initializes model and creates subtitles for video file or all video files in folder depending on input mode. Uses subtitle_file function to create subs."""
     device = "cuda:0"  if torch.cuda.is_available() else "cpu"
     torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
 

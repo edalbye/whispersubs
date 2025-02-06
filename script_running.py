@@ -1,9 +1,11 @@
 from pathlib import Path
 import time
 import logging
+import threading
 
 import customtkinter as ctk
 import torch
+from CTkMessagebox import CTkMessagebox
 from transformers import pipeline
 from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor
 
@@ -11,7 +13,7 @@ import subtitling
 from constants import valid_video_file_types
 from utils import get_list_of_videos
 
-def run_process(appUI, model_id = "openai/whisper-large-v3"):
+def run_process(callback, appUI, model_id = "openai/whisper-large-v3"):
     """Initializes model, and then proceeds to create subtitles based on information from UI."""
     parameters = set_parameters(appUI.lang_selection.get(), appUI.replace_lang.get(), appUI.selected_lang.get(), appUI.replace.get())
 
@@ -39,6 +41,8 @@ def run_process(appUI, model_id = "openai/whisper-large-v3"):
         torch_dtype=torch_dtype,
         device=device,
     )
+
+    #Create a list of videos that should be processed
     path = Path(appUI.path.get())
     if appUI.input_mode.get() == 'Single File':
         list_of_videos = [path]
@@ -47,12 +51,35 @@ def run_process(appUI, model_id = "openai/whisper-large-v3"):
     else:
         raise RuntimeError("Invalid input mode")
 
+    #Run on all videos in list, logging and continuing through the list on exception.
     while list_of_videos:
         video_path = list_of_videos.pop()
         try:
             subtitling.subtitle_file(path = video_path, pipe = pipe, parameters=parameters)
         except Exception as e:
             logging.error('Error at %s', 'division', exc_info=e)
+
+    callback()
+
+def run_on_button_press(appUI, model_id = "openai/whisper-large-v3"):
+    """Code to be run when main button is pressed in UI. Should disable the confirm button, and display processing... instead while process is running, and spin up process in a seperate thread."""
+ 
+    #Disable confirm button
+    loading_window_text = f"Processing {appUI.path.get()}"
+    appUI.confirm_button.configure(state=ctk.DISABLED, text = loading_window_text)
+
+    def process_complete():
+        #Create pop-up window announcing completion
+        completed_text = f"Finshed creating subtitles for {appUI.path.get()}"
+        CTkMessagebox(title="Processing Completed", message = completed_text)
+
+        #Re-enable confirm button
+        appUI.confirm_button.configure(state=ctk.NORMAL, text = "Create Subtitles")
+
+    thread = threading.Thread(target=run_process, args=(process_complete, appUI, ))
+    thread.start()
+
+
 
 
 def set_parameters(lang_selection, replace_lang, selected_lang, replace):

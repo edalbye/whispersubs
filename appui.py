@@ -5,7 +5,7 @@ import customtkinter as ctk
 
 import subtitling
 from constants import valid_video_file_types
-from script_running import run_process
+from script_running import run_on_button_press
 
 class appUI:
 
@@ -120,7 +120,7 @@ class appUI:
         self.replace = ctk.IntVar(value=0)
         self.replace_check = ctk.CTkCheckBox(self.confirm_frame, variable=self.replace, text="Overwrite any existing subtitle files")
 
-        self.confirm_button = ctk.CTkButton(self.confirm_frame, text="Create Subtitles", command=lambda: run_process(self))
+        self.confirm_button = ctk.CTkButton(self.confirm_frame, text="Create Subtitles", command=lambda: run_on_button_press(self))
 
         self.replace_check.grid(row=0, column=0, sticky="nsew")
         self.confirm_button.grid(row=1, column=1, sticky="nsew")
@@ -140,4 +140,3 @@ def set_input_mode(input_mode):
 
 if __name__ == "__main__":
     UI = appUI()
-    
