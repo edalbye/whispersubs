@@ -13,7 +13,7 @@ import subtitling
 from constants import valid_video_file_types
 from utils import get_list_of_videos
 
-def run_process(callback, appUI, model_id = "openai/whisper-large-v3"):
+def run_process(callback, appUI):
     """Initializes model, and then proceeds to create subtitles based on information from UI."""
     parameters = set_parameters(appUI.lang_selection.get(), appUI.replace_lang.get(), appUI.selected_lang.get(), appUI.replace.get())
 
@@ -22,11 +22,11 @@ def run_process(callback, appUI, model_id = "openai/whisper-large-v3"):
     torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
 
     model = AutoModelForSpeechSeq2Seq.from_pretrained(
-        model_id, torch_dtype=torch_dtype, low_cpu_mem_usage=True, use_safetensors=True
+        appUI.model_id, torch_dtype=torch_dtype, low_cpu_mem_usage=True, use_safetensors=True
     )
     model.to(device)
 
-    processor = AutoProcessor.from_pretrained(model_id)
+    processor = AutoProcessor.from_pretrained(appUI.model_id)
 
     pipe = pipeline(
         "automatic-speech-recognition",
@@ -61,7 +61,7 @@ def run_process(callback, appUI, model_id = "openai/whisper-large-v3"):
 
     callback()
 
-def run_on_button_press(appUI, model_id = "openai/whisper-large-v3"):
+def run_on_button_press(appUI):
     """Code to be run when main button is pressed in UI. Should disable the confirm button, and display processing... instead while process is running, and spin up process in a seperate thread."""
  
     #Disable confirm button
@@ -76,7 +76,7 @@ def run_on_button_press(appUI, model_id = "openai/whisper-large-v3"):
         #Re-enable confirm button
         appUI.confirm_button.configure(state=ctk.NORMAL, text = "Create Subtitles")
 
-    thread = threading.Thread(target=run_process, args=(process_complete, appUI, ))
+    thread = threading.Thread(target=run_process, args=(process_complete, appUI))
     thread.start()
 
 

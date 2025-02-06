@@ -2,6 +2,7 @@ from pathlib import Path
 from pydub import AudioSegment
 
 def extract_audio(video_path:Path):
+    """Extracts audio from video located at given path, and saves it as a .wav. Returns a path to that wav file."""
     # Load the video file
     try:
         video_clip = AudioSegment.from_file(video_path)
