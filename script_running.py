@@ -11,10 +11,11 @@ from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor
 
 import subtitling
 from constants import valid_video_file_types
-from utils import get_list_of_videos
+from utils import get_list_of_videos, find_model
 
 def run_process(callback, appUI):
     """Initializes model, and then proceeds to create subtitles based on information from UI."""
+    model_id = find_model(appUI.model_name.get())
     parameters = set_parameters(appUI.lang_selection.get(), appUI.replace_lang.get(), appUI.selected_lang.get(), appUI.replace.get())
 
     device = "cuda:0"  if torch.cuda.is_available() else "cpu"
@@ -22,11 +23,11 @@ def run_process(callback, appUI):
     torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
 
     model = AutoModelForSpeechSeq2Seq.from_pretrained(
-        appUI.model_id, torch_dtype=torch_dtype, low_cpu_mem_usage=True, use_safetensors=True
+        model_id, torch_dtype=torch_dtype, low_cpu_mem_usage=True, use_safetensors=True
     )
     model.to(device)
 
-    processor = AutoProcessor.from_pretrained(appUI.model_id)
+    processor = AutoProcessor.from_pretrained(model_id)
 
     pipe = pipeline(
         "automatic-speech-recognition",

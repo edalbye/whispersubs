@@ -61,12 +61,14 @@ def write_subs(filesub, subs):
 
             f.write(f'{sub[0]}\n0{sub[1]},000  -->  0{sub[2]},000\n{sub[3]}\n\n')
 
-def find_model(ModelId):
-    if ModelId == "CripserWhisper":
+def find_model(model_name):
+    if model_name == "CripserWhisper":
         return "nyrahealth/CrisperWhisper"
-    if ModelId == "WhisperLargeV3":
+    if model_name == "WhisperLargeV3":
         return "openai/whisper-large-v3"
-    return ModelId
+    if model_name == "WhisperLargeV3-Turbo":
+        return "openai/whisper-large-v3-turbo"
+    return model_name
 
 def get_list_of_videos(path: Path, include_subfolders):
     list_of_videos = []

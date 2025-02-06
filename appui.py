@@ -14,7 +14,7 @@ class appUI:
 
         self.bigframe = ctk.CTkFrame(self.root)
 
-        self.model_id = "openai/whisper-large-v3-turbo"
+        #self.model_id = "openai/whisper-large-v3-turbo"
 
         #UI elements for choosing file(s) to process
         self.path = ctk.StringVar(value=str(Path.cwd()))
@@ -107,7 +107,7 @@ class ModelSelectionFrameUI(ctk.CTkFrame):
     def __init__(self, master, model_name):
         super().__init__(master)  
 
-        self.models = ["WhisperV3", "WhisperV3-Turbo"]
+        self.models = ["WhisperLargeV3", "WhisperLargeV3-Turbo"]
         self.model_selection_choices = ctk.CTkComboBox(self, variable=model_name, values=self.models)
 
         self.model_label = ctk.CTkLabel(self, text = "Choose model:")
