@@ -46,7 +46,6 @@ def init_model(appUI):
 
         processor = AutoProcessor.from_pretrained(model_id)
 
-
 def run_process_in_thread(appUI, process, process_complete, running_text):
     #Disable confirm button
     appUI.confirm_button.configure(state=ctk.DISABLED, text = running_text)
@@ -111,12 +110,29 @@ def run_process(appUI):
 def run_on_button_press(appUI):
     #Save config
     save_config(appUI)
+    if not(cuda_check(appUI)):
+        return
     # Check if model file exists, and download it if it doesn't
     model_id = find_model(appUI.model_name.get())
     if hf_try_to_load_from_cache(model_id, "model.safetensors"):
         running_process(appUI)
     else:
         downloading_model(appUI)
+
+def cuda_check(appUI):
+    def cuda_warning():
+        warning_text = "Warning: Cuda is not detected and you are attempting to run the full model. This will work but will likely be extremely slow. It is strongly recommended to only use Turbo model when running on cpu."
+        warning_box = CTkMessagebox(title="Processing Completed", message = warning_text, option_1="Cancel", option_2="Continue")
+
+        if warning_box.get() == "Continue":
+            return True
+        elif warning_box.get() == "Cancel":
+            return False
+
+    if appUI.model_name.get() == "WhisperLargeV3":
+        if not(torch.cuda.is_available()):
+             return cuda_warning()
+    return True
 
 def save_config(appUI):
     appUI.config.set('main', "input_mode", str(appUI.input_mode.get()))
