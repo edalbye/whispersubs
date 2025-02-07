@@ -1,10 +1,11 @@
 from pathlib import Path
 import tkinter.filedialog as tkfd
+from configparser import ConfigParser
 
 import customtkinter as ctk
 
 import subtitling
-from constants import valid_video_file_types
+from constants import valid_video_file_types, supported_models, supported_languages, config_defaults
 from script_running import run_on_button_press
 
 class appUI:
@@ -12,40 +13,51 @@ class appUI:
     def __init__(self):
         self.root = ctk.CTk()
 
+        self.config = ConfigParser()
+        self.config.read('config.ini')
+        if not(self.config.has_section('main')):
+            self.config.add_section('main')
+        for key, value in config_defaults.items():
+            if not(self.config.has_option('main', key)):
+                self.config.set('main', key, value)
+
+        with open('config.ini', 'w') as f:
+            self.config.write(f)
+
         self.bigframe = ctk.CTkFrame(self.root)
 
         #self.model_id = "openai/whisper-large-v3-turbo"
 
         #UI elements for choosing file(s) to process
-        self.path = ctk.StringVar(value=str(Path.cwd()))
-        self.input_mode = ctk.StringVar(value = "Single File")
+        self.path = ctk.StringVar(value=self.config.get('main', 'filepath'))
+        self.input_mode = ctk.StringVar(value = self.config.get('main', 'input_mode'))
 
         self.location_frame = LocationFrameUI(self.bigframe, self.path, self.input_mode)
 
         self.location_frame.pack(fill = "both", expand=1, padx = 20, pady = 20)
 
-        self.model_name = ctk.StringVar()
+        self.model_name = ctk.StringVar(value = self.config.get('main', 'model_name'))
         self.model_selection_frame = ModelSelectionFrameUI(self.bigframe, self.model_name)
 
         self.model_selection_frame.pack(expand=True, fill='both', padx = 20, pady = (0,20))
 
         #UI elements relating to language mode
-        self.lang_selection = ctk.StringVar(value = "Auto-Detect Single Language")
-        self.replace_lang = ctk.IntVar()
-        self.selected_lang = ctk.StringVar()
+        self.lang_selection = ctk.StringVar(value = self.config.get('main', 'lang_selection'))
+        self.replace_lang = ctk.BooleanVar(value = self.config.getboolean('main', 'replace_lang'))
+        self.selected_lang = ctk.StringVar(value = self.config.get('main', 'selected_lang'))
         self.lang_frame = LangFrameUI(self.bigframe, self.lang_selection, self.replace_lang, self.selected_lang)
 
         self.lang_frame.pack(expand=True, fill='both', padx = 20)
 
         self.confirm_frame = ctk.CTkFrame(self.bigframe)
 
-        self.replace = ctk.IntVar(value=0)
-        self.replace_check = ctk.CTkCheckBox(self.confirm_frame, variable=self.replace, text="Overwrite any existing subtitle files")
+        self.replace_subs = ctk.BooleanVar(value = self.config.getboolean('main', 'replace_subs'))
+        self.replace_check = ctk.CTkCheckBox(self.confirm_frame, variable=self.replace_subs, text="Overwrite any existing subtitle files")
 
         self.confirm_button = ctk.CTkButton(self.confirm_frame, text="Create Subtitles", command=lambda: run_on_button_press(self))
 
-        self.replace_check.grid(row=0, column=0, sticky="nsew", padx = 10, pady = 5)
-        self.confirm_button.grid(row=1, column=0, columnspan = 2, padx = 10, pady = 5)
+        self.replace_check.pack(anchor = 'w', padx = 10, pady = 5)
+        self.confirm_button.pack(padx = 10, pady = 5)
 
         self.confirm_frame.pack(expand=True, fill='both', padx = 20, pady = 20)
 
@@ -107,7 +119,7 @@ class ModelSelectionFrameUI(ctk.CTkFrame):
     def __init__(self, master, model_name):
         super().__init__(master)  
 
-        self.models = ["WhisperLargeV3", "WhisperLargeV3-Turbo"]
+        self.models = supported_models
         self.model_selection_choices = ctk.CTkComboBox(self, variable=model_name, values=self.models)
 
         self.model_label = ctk.CTkLabel(self, text = "Choose model:")
@@ -145,7 +157,7 @@ class LangFrameUI(ctk.CTkFrame):
         self.replace_lang_checkbox = ctk.CTkCheckBox(self, text = "Replace any previously generated language detections", variable = replace_lang)
 
         #Manual language selection, from list of available languages
-        self.langs = ["English", "Spanish"]
+        self.langs = supported_languages
 
         self.lang_selection_choices = ctk.CTkComboBox(self, variable=selected_lang, values=self.langs, state=ctk.DISABLED)
 
