@@ -16,7 +16,13 @@ class appUI:
         self.root.title("WhisperSubs")
 
         self.config = ConfigParser()
-        self.config.read('config.ini')
+
+        try:
+            self.config.read('config.ini')
+        except FileNotFoundError:
+            pass
+            #Config file doesn't exist
+
         if not(self.config.has_section('main')):
             self.config.add_section('main')
         for key, value in config_defaults.items():

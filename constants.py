@@ -8,7 +8,7 @@ config_defaults = {
     'filepath': str(Path.cwd()),
     'model_name': "WhisperLargeV3",
     'lang_selection': "Auto-Detect Single Language",
-    'replace_lang': False,
+    'replace_lang': "False",
     'selected_lang': "",
-    'replace_subs': False,
+    'replace_subs': "False",
 }
