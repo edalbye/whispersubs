@@ -13,6 +13,8 @@ class appUI:
     def __init__(self):
         self.root = ctk.CTk()
 
+        self.root.title("WhisperSubs")
+
         self.config = ConfigParser()
         self.config.read('config.ini')
         if not(self.config.has_section('main')):

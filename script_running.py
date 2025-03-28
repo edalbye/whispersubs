@@ -14,25 +14,13 @@ import subtitling
 from constants import valid_video_file_types
 from utils import get_list_of_videos, find_model
 
-def downloading_model(appUI):
-    """Code to be run when main button is pressed in UI. Should disable the confirm button, and display processing... instead while process is running, and spin up process in a seperate thread."""
-    loading_window_text = f"Downloading {appUI.model_name.get()}"
-    run_process_in_thread(appUI, init_model, running_process, loading_window_text)
-    #Disable confirm button
-    loading_window_text = f"Downloading {appUI.model_name.get()}"
-    appUI.confirm_button.configure(state=ctk.DISABLED, text = loading_window_text)
-
-def running_process(appUI):
-    """Code to be run when main button is pressed in UI. Should disable the confirm button, and display processing... instead while process is running, and spin up process in a seperate thread."""
-    loading_window_text = f"Processing {appUI.path.get()}"
-    run_process_in_thread(appUI, run_process, subtitle_complete_pop_up, loading_window_text)
-
 def subtitle_complete_pop_up(appUI):
     #Create pop-up window announcing completion
     completed_text = f"Finshed creating subtitles for {appUI.path.get()}"
     CTkMessagebox(title="Processing Completed", message = completed_text)
 
 def init_model(appUI):
+        """Attempts to initialize selected model, used to insure files are present and download as needed."""
         model_id = find_model(appUI.model_name.get())
 
         device = "cuda:0"  if torch.cuda.is_available() else "cpu"
@@ -47,6 +35,7 @@ def init_model(appUI):
         processor = AutoProcessor.from_pretrained(model_id)
 
 def run_process_in_thread(appUI, process, process_complete, running_text):
+    """Spins up new thread to handle process. While running disables confirm button and overwrites text with running_text. Runs process_complete after process finishes."""
     #Disable confirm button
     appUI.confirm_button.configure(state=ctk.DISABLED, text = running_text)
 
@@ -108,6 +97,7 @@ def run_process(appUI):
             logging.error('Error at %s', 'division', exc_info=e)
 
 def run_on_button_press(appUI):
+    """Main logic to run when confirm button is pressed"""
     #Save config
     save_config(appUI)
     if not(cuda_check(appUI)):
@@ -119,7 +109,18 @@ def run_on_button_press(appUI):
     else:
         downloading_model(appUI)
 
+def downloading_model(appUI):
+    """Code to be run when main button is pressed in UI. Should disable the confirm button, and display processing... instead while process is running, and spin up process in a seperate thread."""
+    loading_window_text = f"Downloading {appUI.model_name.get()}"
+    run_process_in_thread(appUI, init_model, running_process, loading_window_text)
+
+def running_process(appUI):
+    """Code to be run when main button is pressed in UI. Should disable the confirm button, and display processing... instead while process is running, and spin up process in a seperate thread."""
+    loading_window_text = f"Processing {appUI.path.get()}"
+    run_process_in_thread(appUI, run_process, subtitle_complete_pop_up, loading_window_text)
+
 def cuda_check(appUI):
+    """Checks if attepting to run full model without cuda, and prompts user to go back with a pop-up if so."""
     def cuda_warning():
         warning_text = "Warning: Cuda is not detected and you are attempting to run the full model. This will work but will likely be extremely slow. It is strongly recommended to only use Turbo model when running on cpu."
         warning_box = CTkMessagebox(title="Processing Completed", message = warning_text, option_1="Cancel", option_2="Continue")
@@ -135,6 +136,7 @@ def cuda_check(appUI):
     return True
 
 def save_config(appUI):
+    """Gets config options from UI variables and saves them to config file."""
     appUI.config.set('main', "input_mode", str(appUI.input_mode.get()))
     appUI.config.set('main', "filepath", str(appUI.path.get()))
     appUI.config.set('main', "model_name", str(appUI.model_name.get()))
