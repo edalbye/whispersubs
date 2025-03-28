@@ -1,9 +1,7 @@
 A small script that uses Whisper to automatically generate English subtitles, in .srt format, for video files. Currently runs on a number of video file formats, the exact list is available in constants.py.
 
-The script expects to be passed a path to a video file to process, however can also run on all files in a folder via the argument --input_mode: folder will process all files in a given folder, and rootdir will process all files withing a given folder and all of it's subfolders.
+Now launches a GUI where files and options can be selected.
 
-By default it will run a first pass to determine the most common language detected throughout the file and then use that language for the translation. If there are multiple language present in the video file can be run with --multi_lang to autodetect language on each chunk seperately.
+Models currently supported are WhiperLargeV3 and WhiperLargeV3Turbo. The turbo model is strongly recommended on systems without cuda capability.
 
-Will leave behind intermediary files, a filename.wav file containing the audio track and a filenamelang.txt file containing the languages detected by the first pass, for troubleshooting and to reduce running time for subsequent runs if needed. If these are undesired they can be removed by including the --cleanup argument.
-
-If the --replace argument is used, the script will overwrite any existing subtitle(filename.srt) files, otherwise it will skip the associated video files.
+Auto-Detect single language will first attempt to predict the most common language appearing in the video, then will use that language to transcribe and translate everything. Auto-Detect multiple languages will simply process small chunks of the video based on what the model thinks it hears in each separate chunk. This is good for multilanguage sources, but may cause hallucinations if the model can't clearly identify each segment and will generally give worst results that detecting a single language when only one is present.
