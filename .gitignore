@@ -1,3 +1,2 @@
-".venv"
-"output"
-config.ini
+/output/
+/config.ini
